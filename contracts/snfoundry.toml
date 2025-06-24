@@ -1,5 +1,4 @@
 [sncast.default]
-url = "http://localhost:5050/rpc"
 accounts-file = "accounts.json"
-account = "devnet0"
+account = "0xpest"
 show-explorer-links = false
