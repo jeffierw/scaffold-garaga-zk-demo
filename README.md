@@ -106,4 +106,4 @@ yarn dev
 
 ## 前端页面
 
-![verify](./assets/verify.png)
+![verify](./app/src/assets/verify.png)
