@@ -1,121 +1,109 @@
-# Scaffold Garaga app
+# Task5: 实现 x!=y 的 2 次方证明并在 Testnet 完成这一简单证明，提交 GitHub 链接，链接内包含实现的代码
 
-This is a Noir+Garaga+Starknet starter with in-browser proving and a step-by-step guide how to:
-- Generate and deploy UltraHonk proof verifier contract to Starknet devnet
-- Add state to your privacy preserving app
-- Add wallet connection and deploy to public testnet
+## 修改 Noir 代码
 
-## Install
+circuit/src/main.nr
 
-Ensure you have node.js >= 20 installed.  
-
-Bun is used for package management, install it with:
-```sh
-make install-bun
+```
+fn main(x: Field, y: pub Field) {
+    assert(x != y * y);
+}
 ```
 
-For compiling Noir circuits and generating proofs we need specific versions of Aztec packages:
-```sh
-make install-noir
-make install-barretenberg
+## 编译 Noir 电路
+
+```
+cd circuit && nargo build
 ```
 
-Starknet toolkit comes in a single bundle via asdf (the following command will install it if you don't have it):
-```sh
-make install-starknet
+## 执行电路生成见证
+
+```
+cd circuit && nargo execute witness
+[circuit] Circuit witness successfully solved
+[circuit] Witness saved to target/witness.gz
 ```
 
-We also need to install a tool for spawning local Starknet chain:
-```sh
-make install-devnet
+## 生成验证密钥
+
+```
+bb write_vk --scheme ultra_honk --oracle_hash starknet -b ./circuit/target/circuit.json -o ./circuit/target
+Scheme is: ultra_honk, num threads: 12
+VK saved to "./circuit/target/vk"
 ```
 
-Finally we need to install Garaga. Make sure you have Python 3.10 in your system. You may also need to start a separate Python virtual environment for this to work. You can do that with `python3.10 -m venv garaga-venv && source garaga-venv/bin/activate`. Then install with:
+## 新开 terminal 启动 Python 虚拟环境 使用 Garaga 在 Cairo 生成验证者合约
 
-```sh
-make install-garaga
+```
+cd contracts && garaga gen --system ultra_starknet_honk --vk ../circuit/target/vk --project-name verifier
+⠦ Generating Smart Contract project for ProofSystem.UltraStarknetHonk using vk...
+Done!
+Smart Contract project created:
+/starknet-scaffold-garaga/contracts/verifier/
+├── .tool-versions
+├── Scarb.lock
+├── Scarb.toml
+└── src/
+    ├── honk_verifier.cairo
+    ├── honk_verifier_circuits.cairo
+    ├── honk_verifier_constants.cairo
+    └── lib.cairo
 ```
 
-Note that we need specific versions of Noir, Barretenberg, and Garaga to work well together. If you are experiencing any issues with code generation, proving, and verification — first of all ensure you have the correct package versions.
+## 创建账号并部署
 
-## Tutorial
+```bash
+sncast account create \
+	--network sepolia \
+	--name 0xpest
 
-This repo is organized in layers: each app iteration is a new git branch.  
-
-Follow the steps and checkout the necessary branch:
-1. [`master`](https://github.com/m-kus/scaffold-garaga/tree/master) — in-browser proof generation and stateless proof verification in devnet
-2. [`1-app-logic`](https://github.com/m-kus/scaffold-garaga/tree/1-app-logic) — more involved Noir circuit logic
-3. [`2-app-state`](https://github.com/m-kus/scaffold-garaga/tree/2-app-state) — extend onchain part with a storage for nullifiers
-4. [`3-testnet`](https://github.com/m-kus/scaffold-garaga/tree/3-testnet) — deploy to public Starknet testnet and interact via wallet
-
-## Run app
-
-First of all we need to build our Noir circuit:
-
-```sh
-make build-circuit
+sncast account deploy \
+    --network sepolia \
+    --name 0xpest
 ```
 
-Sample inputs are already provided in `Prover.toml`, execute to generate witness:
+## 声明合约代码
 
-```sh
-make exec-circuit
+```
+sncast declare --contract-name UltraStarknetHonkVerifier --url https://starknet-sepolia.public.blastapi.io/rpc/v0_8
 ```
 
-Generate verification key:
+## 部署验证器
 
-```sh
-make gen-vk
+```
+sncast deploy --salt 0xaa --class-hash 0x004d13e14caa3b225b07595e7edcade77ce849e30ee7908bf4b2e4446d652ebf --url https://starknet-sepolia.public.blastapi.io/rpc/v0_8
+command: deploy
+contract_address: 0x029ab70A7aBAeA8271919D7B7ee16320e9027A1552f0276742D03B507b10B59c
+transaction_hash: 0x4018385beb13172aacfb933dc781f9c3bf384d0cba14a0c53d274c822c00c4c
+
+To see deployment details, visit:
+contract: https://sepolia.starkscan.co/contract/0x029ab70A7aBAeA8271919D7B7ee16320e9027A1552f0276742D03B507b10B59c
+transaction: https://sepolia.starkscan.co/tx/0x4018385beb13172aacfb933dc781f9c3bf384d0cba14a0c53d274c822c00c4c
 ```
 
-Now we can generate the verifier contract in Cairo using Garaga:
+## 修改前端文件代码
 
-```sh
-make gen-verifier
+```
+cp ./circuit/target/circuit.json ./app/src/assets/circuit.json
+cp ./circuit/target/vk ./app/src/assets/vk.bin
+cp ./contracts/target/release/verifier_UltraStarknetHonkVerifier.contract_class.json ./app/src/assets/verifier.json
+
+# /app/src/App.tsx
+
+const provider = new RpcProvider({
+  nodeUrl: "https://starknet-sepolia.public.blastapi.io/rpc/v0_8",
+});
+// TODO: use conract address from the result of the `make deploy-verifier` step
+const contractAddress =
+  "0x029ab70a7abaea8271919d7b7ee16320e9027a1552f0276742d03b507b10b59c";
 ```
 
-Let's start our local development network in other terminal instance:
+## 启动前端
 
-```sh
-make devnet
+```
+yarn dev
 ```
 
-You now need to start a new terminal window. Initialize the account we will be using for deployment:
+## 前端页面
 
-```sh
-make accounts-file
-```
-
-First we need to declare out contract ("upload" contract code):
-
-```sh
-make declare-verifier
-```
-
-Now we can instantiate the contract class we obtained (you might need to update the command in Makefile):
-
-```sh
-make deploy-verifier
-```
-
-Great! Now let's copy necessary artifacts:
-
-```sh
-make artifacts
-```
-
-Prepare the app and its requirements so you can run it. Go to the `app` folder and:
-1. Update the contract address in the app code (change App.tsx). 
-1. Make sure you have `tsc` installed. If not, you can install it with `bun add -d typescript@next`.
-1. Install vite with `npm install -D vite`
-1. Build the app with `bun run build`
-1. Finally we can run the app: `bun run dev`
-
-## Useful links
-
-- Noir quickstart https://noir-lang.org/docs/getting_started/quick_start
-- Garaga docs https://garaga.gitbook.io/garaga/deploy-your-snark-verifier-on-starknet/noir
-- Starknet.js docs https://starknetjs.com/docs/guides/intro
-- Starknet quickstart https://docs.starknet.io/quick-start/overview/
-- Sncast 101 https://foundry-rs.github.io/starknet-foundry/starknet/101.html
-- Cairo book https://book.cairo-lang.org/
+![verify](./assets/verify.png)
